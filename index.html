@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Jogo de Estratégia</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #e9ecef;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        canvas {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+            cursor: pointer;
+        }
+        .status {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        input { padding: 8px; width: 60px; border: 1px solid #ccc; border-radius: 4px; }
+        button {
+            padding: 8px 15px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #218838; }
+    </style>
+</head>
+<body>
+
+    <div class="status" id="status">Vez dos Policiais</div>
+
+    <div class="controls">
+        <label>Níveis (Linhas):</label>
+        <input type="number" id="levels" value="4" min="3" max="7">
+        <button onclick="initGame()">Gerar Novo Tabuleiro</button>
+    </div>
+
+    <canvas id="gameCanvas" width="500" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const levelsInput = document.getElementById('levels');
+
+        let nodes = [];
+        let connections = [];
+        let selectedNode = null;
+        let turn = 'police';
+
+        function initGame() {
+            const levels = parseInt(levelsInput.value);
+            nodes = [];
+            connections = [];
+            turn = 'police';
+            selectedNode = null;
+            statusText.innerText = "Vez dos Policiais";
+
+            const padding = 60;
+            const availableHeight = canvas.height - (padding * 2);
+            const availableWidth = canvas.width - (padding * 2);
+
+            // Geração Dinâmica de Nós (Formato Triangular/Pirâmide)
+            for (let i = 0; i < levels; i++) {
+                // A quantidade de nós por linha aumenta conforme o nível (estilo a imagem)
+                // Nível 0: 3 nós, Nível 1: 3 nós, ... Nível final: 1 nó
+                let nodesInRow = (i === levels - 1) ? 1 : 3; 
+                if (i > 0 && i < levels - 1) nodesInRow = 3; 
+
+                for (let j = 0; j < nodesInRow; j++) {
+                    let x;
+                    if (nodesInRow === 1) {
+                        x = canvas.width / 2;
+                    } else {
+                        x = padding + (j * (availableWidth / (nodesInRow - 1)));
+                    }
+                    
+                    let y = padding + (i * (availableHeight / (levels - 1)));
+                    
+                    let role = null;
+                    if (i === 0) role = 'police';
+                    if (i === levels - 1) role = 'thief';
+
+                    nodes.push({ id: nodes.length, x, y, role, level: i });
+                }
+            }
+
+            // Gerar Conexões Automáticas por Proximidade
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const dist = Math.sqrt((nodes[i].x - nodes[j].x)**2 + (nodes[i].y - nodes[j].y)**2);
+                    // Conecta se estiverem "perto" o suficiente (ajustado pela altura do tabuleiro)
+                    if (dist < (availableHeight / (levels - 2)) * 1.5) {
+                        connections.push([i, j]);
+                    }
+                }
+            }
+            drawBoard();
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Conexões
+            ctx.strokeStyle = '#dee2e6';
+            ctx.lineWidth = 6;
+            connections.forEach(conn => {
+                ctx.beginPath();
+                ctx.moveTo(nodes[conn[0]].x, nodes[conn[0]].y);
+                ctx.lineTo(nodes[conn[1]].x, nodes[conn[1]].y);
+                ctx.stroke();
+            });
+
+            // Nós
+            nodes.forEach(node => {
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
+                ctx.fillStyle = "white";
+                ctx.fill();
+                ctx.strokeStyle = "#495057";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                if (node.role === 'police') drawEmoji(node.x, node.y, '👮');
+                else if (node.role === 'thief') drawEmoji(node.x, node.y, '🥷');
+
+                if (selectedNode === node) {
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 28, 0, Math.PI * 2);
+                    ctx.strokeStyle = "#28a745";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawEmoji(x, y, emoji) {
+            ctx.font = '26px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, x, y);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            nodes.forEach(node => {
+                const dist = Math.sqrt((mouseX - node.x)**2 + (mouseY - node.y)**2);
+                if (dist < 30) handleInteraction(node);
+            });
+        });
+
+        function handleInteraction(node) {
+            if (!selectedNode) {
+                if (node.role === turn) selectedNode = node;
+            } else {
+                if (isValidMove(selectedNode, node)) {
+                    node.role = selectedNode.role;
+                    selectedNode.role = null;
+                    selectedNode = null;
+                    turn = (turn === 'police') ? 'thief' : 'police';
+                    statusText.innerText = `Vez do ${turn === 'police' ? 'Policiais' : 'Ladrão'}`;
+                    checkEndGame();
+                } else {
+                    selectedNode = (node.role === turn) ? node : null;
+                }
+            }
+            drawBoard();
+        }
+
+        function isValidMove(from, to) {
+            if (to.role !== null) return false;
+            return connections.some(c => (c[0] === from.id && c[1] === to.id) || (c[1] === from.id && c[0] === to.id));
+        }
+
+        function checkEndGame() {
+            const thief = nodes.find(n => n.role === 'thief');
+            const canMove = nodes.some(n => isValidMove(thief, n));
+            
+            if (!canMove) {
+                alert("Policiais venceram! Ladrão cercado.");
+                initGame();
+            } else if (thief.level === 0) {
+                alert("Ladrão venceu! Ele escapou pelo topo.");
+                initGame();
+            }
+        }
+
+        initGame(); // Inicia primeira vez
+    </script>
+</body>
+</html>
