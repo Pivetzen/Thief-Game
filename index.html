@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Jogo de Estratégia</title>
+    <title>Police vs Thief - Fixed Visuals</title>
     <style>
         body {
             display: flex;
@@ -53,7 +53,7 @@
 
     <div class="controls">
         <label>Níveis (Linhas):</label>
-        <input type="number" id="levels" value="4" min="3" max="7">
+        <input type="number" id="levels" value="3" min="3" max="7">
         <button onclick="initGame()">Gerar Novo Tabuleiro</button>
     </div>
 
@@ -78,43 +78,27 @@
             selectedNode = null;
             statusText.innerText = "Vez dos Policiais";
 
-            const padding = 60;
+            const padding = 80;
             const availableHeight = canvas.height - (padding * 2);
             const availableWidth = canvas.width - (padding * 2);
 
-            // Geração Dinâmica de Nós (Formato Triangular/Pirâmide)
             for (let i = 0; i < levels; i++) {
-                // A quantidade de nós por linha aumenta conforme o nível (estilo a imagem)
-                // Nível 0: 3 nós, Nível 1: 3 nós, ... Nível final: 1 nó
                 let nodesInRow = (i === levels - 1) ? 1 : 3; 
-                if (i > 0 && i < levels - 1) nodesInRow = 3; 
-
                 for (let j = 0; j < nodesInRow; j++) {
-                    let x;
-                    if (nodesInRow === 1) {
-                        x = canvas.width / 2;
-                    } else {
-                        x = padding + (j * (availableWidth / (nodesInRow - 1)));
-                    }
-                    
+                    let x = nodesInRow === 1 ? canvas.width / 2 : padding + (j * (availableWidth / (nodesInRow - 1)));
                     let y = padding + (i * (availableHeight / (levels - 1)));
-                    
-                    let role = null;
-                    if (i === 0) role = 'police';
-                    if (i === levels - 1) role = 'thief';
-
-                    nodes.push({ id: nodes.length, x, y, role, level: i });
+                    nodes.push({ id: nodes.length, x, y, role: null, level: i });
                 }
             }
 
-            // Gerar Conexões Automáticas por Proximidade
+            nodes.filter(n => n.level === 0).forEach(n => n.role = 'police');
+            nodes[nodes.length - 1].role = 'thief';
+
+            const maxDist = (availableHeight / (levels - 1)) * 1.6;
             for (let i = 0; i < nodes.length; i++) {
                 for (let j = i + 1; j < nodes.length; j++) {
                     const dist = Math.sqrt((nodes[i].x - nodes[j].x)**2 + (nodes[i].y - nodes[j].y)**2);
-                    // Conecta se estiverem "perto" o suficiente (ajustado pela altura do tabuleiro)
-                    if (dist < (availableHeight / (levels - 2)) * 1.5) {
-                        connections.push([i, j]);
-                    }
+                    if (dist < maxDist) connections.push([i, j]);
                 }
             }
             drawBoard();
@@ -123,54 +107,60 @@
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Conexões
-            ctx.strokeStyle = '#dee2e6';
-            ctx.lineWidth = 6;
+            // Linhas
             connections.forEach(conn => {
                 ctx.beginPath();
                 ctx.moveTo(nodes[conn[0]].x, nodes[conn[0]].y);
                 ctx.lineTo(nodes[conn[1]].x, nodes[conn[1]].y);
+                ctx.strokeStyle = '#cbd5e0';
+                ctx.lineWidth = 6;
                 ctx.stroke();
             });
 
-            // Nós
+            // Nós e Peças
             nodes.forEach(node => {
+                // Desenha o círculo do nó
                 ctx.beginPath();
-                ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
+                ctx.arc(node.x, node.y, 28, 0, Math.PI * 2);
                 ctx.fillStyle = "white";
                 ctx.fill();
-                ctx.strokeStyle = "#495057";
+                ctx.strokeStyle = "#4a5568";
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
-                if (node.role === 'police') drawEmoji(node.x, node.y, '👮');
-                else if (node.role === 'thief') drawEmoji(node.x, node.y, '🥷');
+                if (node.role === 'police') {
+                    ctx.font = '34px serif';
+                    ctx.fillText('👮', node.x - 17, node.y + 12);
+                } else if (node.role === 'thief') {
+                    // Se o emoji falhar, desenhamos um círculo preto com "olhos" (estilo ninja)
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+                    ctx.fillStyle = "#1a202c";
+                    ctx.fill();
+                    // Olhos do ladrão/ninja
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(node.x - 8, node.y - 4, 6, 3);
+                    ctx.fillRect(node.x + 2, node.y - 4, 6, 3);
+                }
 
                 if (selectedNode === node) {
                     ctx.beginPath();
-                    ctx.arc(node.x, node.y, 28, 0, Math.PI * 2);
-                    ctx.strokeStyle = "#28a745";
-                    ctx.lineWidth = 3;
+                    ctx.arc(node.x, node.y, 32, 0, Math.PI * 2);
+                    ctx.strokeStyle = "#48bb78";
+                    ctx.lineWidth = 4;
                     ctx.stroke();
                 }
             });
         }
 
-        function drawEmoji(x, y, emoji) {
-            ctx.font = '26px serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, x, y);
-        }
-
-        canvas.addEventListener('click', (e) => {
+        canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
             nodes.forEach(node => {
                 const dist = Math.sqrt((mouseX - node.x)**2 + (mouseY - node.y)**2);
-                if (dist < 30) handleInteraction(node);
+                if (dist < 35) handleInteraction(node);
             });
         });
 
@@ -184,7 +174,7 @@
                     selectedNode = null;
                     turn = (turn === 'police') ? 'thief' : 'police';
                     statusText.innerText = `Vez do ${turn === 'police' ? 'Policiais' : 'Ladrão'}`;
-                    checkEndGame();
+                    setTimeout(checkEndGame, 50);
                 } else {
                     selectedNode = (node.role === turn) ? node : null;
                 }
@@ -199,18 +189,19 @@
 
         function checkEndGame() {
             const thief = nodes.find(n => n.role === 'thief');
-            const canMove = nodes.some(n => isValidMove(thief, n));
+            if (!thief) return;
+            const canThiefMove = nodes.some(n => isValidMove(thief, n));
             
-            if (!canMove) {
-                alert("Policiais venceram! Ladrão cercado.");
+            if (!canThiefMove) {
+                alert("Policiais venceram! O ladrão foi capturado.");
                 initGame();
             } else if (thief.level === 0) {
-                alert("Ladrão venceu! Ele escapou pelo topo.");
+                alert("Ladrão venceu! Ele escapou.");
                 initGame();
             }
         }
 
-        initGame(); // Inicia primeira vez
+        initGame();
     </script>
 </body>
 </html>
