@@ -5,58 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🚨 Policia vs Ladrão 🚨</title>
     <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            background-color: #f1f3f5;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .controls {
-            background: white;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            margin-bottom: 25px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-        canvas {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-            cursor: pointer;
-        }
-        .status {
-            font-size: 1.6rem;
-            font-weight: bold;
-            margin-bottom: 12px;
-            color: #2c3e50;
-        }
-        input { padding: 10px; width: 70px; border: 2px solid #ddd; border-radius: 6px; font-size: 1rem; }
-        button {
-            padding: 10px 20px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-        }
+        body { display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f1f3f5; font-family: 'Segoe UI', sans-serif; }
+        .controls { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; }
+        canvas { background: white; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); cursor: pointer; }
+        .status { font-size: 1.6rem; font-weight: bold; margin-bottom: 12px; color: #2c3e50; }
+        select, input { padding: 8px; border: 2px solid #ddd; border-radius: 6px; font-size: 0.9rem; }
+        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
         button:hover { background: #218838; }
     </style>
 </head>
 <body>
 
-    <div class="status" id="status">Vez dos Policiais</div>
+    <div class="status" id="status">Carregando...</div>
 
     <div class="controls">
-        <label>Níveis:</label>
-        <input type="number" id="levels" value="5" min="3" max="8">
-        <button onclick="initGame()">Gerar Novo Tabuleiro</button>
+        <div>
+            <label>Níveis:</label>
+            <input type="number" id="levels" value="5" min="3" max="8">
+        </div>
+        <div>
+            <label>Modo:</label>
+            <select id="gameMode">
+                <option value="PvP">Jogador vs Jogador</option>
+                <option value="PvC">Jogador vs CPU (Ladrão)</option>
+                <option value="CvP">CPU (Policial) vs Jogador</option>
+            </select>
+        </div>
+        <button onclick="initGame()">Reiniciar Jogo</button>
     </div>
 
     <canvas id="gameCanvas" width="550" height="700"></canvas>
@@ -66,11 +41,13 @@
         const ctx = canvas.getContext('2d');
         const statusText = document.getElementById('status');
         const levelsInput = document.getElementById('levels');
+        const modeSelect = document.getElementById('gameMode');
 
         let nodes = [];
         let connections = [];
         let selectedNode = null;
         let turn = 'police';
+        let isGameOver = false;
 
         function initGame() {
             const levels = parseInt(levelsInput.value);
@@ -78,184 +55,156 @@
             connections = [];
             turn = 'police';
             selectedNode = null;
-            statusText.innerText = "Vez dos Policiais";
+            isGameOver = false;
+            updateStatus();
 
             const paddingH = 60;
             const paddingV = 80;
-            const availableHeight = canvas.height - (paddingV * 2);
-            
-            // Define o número de colunas iniciais (3 para níveis baixos, 5 para nível 5+)
             const startCols = levels >= 5 ? 5 : 3;
 
-            // 1. Geração de Nós com Afunilamento
             for (let i = 0; i < levels; i++) {
-                // Calcula quantas colunas essa linha terá (afunilando no final)
-                let nodesInRow;
-                if (i === levels - 1) {
-                    nodesInRow = 1; // Última linha sempre 1 ponto (Ladrão)
-                } else if (i === levels - 2) {
-                    nodesInRow = Math.min(startCols, 3); // Penúltima linha afunila para 3
-                } else {
-                    nodesInRow = startCols; // Linhas superiores mantêm a largura
-                }
-
+                let nodesInRow = (i === levels - 1) ? 1 : (i === levels - 2 ? Math.min(startCols, 3) : startCols);
                 for (let j = 0; j < nodesInRow; j++) {
-                    const availableWidth = canvas.width - (paddingH * 2);
-                    let x;
-                    if (nodesInRow === 1) {
-                        x = canvas.width / 2;
-                    } else {
-                        x = paddingH + (j * (availableWidth / (nodesInRow - 1)));
-                    }
-                    
-                    let y = paddingV + (i * (availableHeight / (levels - 1)));
+                    let x = nodesInRow === 1 ? canvas.width / 2 : paddingH + (j * ((canvas.width - paddingH * 2) / (nodesInRow - 1)));
+                    let y = paddingV + (i * ((canvas.height - paddingV * 2) / (levels - 1)));
                     nodes.push({ id: nodes.length, x, y, role: null, level: i, col: j, colMax: nodesInRow });
                 }
             }
 
-            // 2. Distribuição de Peças
             nodes.filter(n => n.level === 0).forEach(n => n.role = 'police');
             nodes[nodes.length - 1].role = 'thief';
 
-            // 3. Sistema de Conexão (Vertical, Horizontal e Diagonal)
+            // Gerar Conexões Full-Grid
             for (let i = 0; i < nodes.length; i++) {
                 for (let j = i + 1; j < nodes.length; j++) {
-                    const n1 = nodes[i];
-                    const n2 = nodes[j];
-
-                    // Conexão Horizontal (mesmo nível, colunas adjacentes)
-                    if (n1.level === n2.level && Math.abs(n1.col - n2.col) === 1) {
-                        addConnection(i, j);
-                    }
-
-                    // Conexão Vertical e Diagonal (níveis adjacentes)
-                    if (n2.level === n1.level + 1) {
-                        const distH = Math.abs(n1.x - n2.x);
-                        const verticalGap = availableHeight / (levels - 1);
-                        
-                        // Permite conexão se estiverem verticalmente alinhados ou diagonalmente próximos
-                        if (distH < (canvas.width / (n1.colMax > 1 ? n1.colMax - 0.5 : 1))) {
-                            addConnection(i, j);
-                        }
+                    const n1 = nodes[i], n2 = nodes[j];
+                    if ((n1.level === n2.level && Math.abs(n1.col - n2.col) === 1) || 
+                        (n2.level === n1.level + 1 && Math.abs(n1.x - n2.x) < (canvas.width / (n1.colMax > 1 ? n1.colMax - 0.5 : 1)))) {
+                        connections.push([i, j]);
                     }
                 }
             }
             drawBoard();
+            checkCPUTurn();
         }
 
-        function addConnection(a, b) {
-            if (!connections.some(c => (c[0] === a && c[1] === b) || (c[1] === a && c[0] === b))) {
-                connections.push([a, b]);
-            }
+        function updateStatus() {
+            const mode = modeSelect.value;
+            let text = turn === 'police' ? "Vez dos Policiais" : "Vez do Ladrão";
+            if ((mode === 'PvC' && turn === 'thief') || (mode === 'CvP' && turn === 'police')) text += " (CPU...)";
+            statusText.innerText = text;
         }
 
         function drawThief(x, y) {
-            const r = 20;
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.beginPath();
-            ctx.arc(0, 0, r, 0, Math.PI * 2);
-            ctx.fillStyle = "#1a202c";
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(-15, -4);
-            ctx.bezierCurveTo(-10, -10, 10, -10, 15, -4);
-            ctx.bezierCurveTo(10, 2, -10, 2, -15, -4);
-            ctx.fillStyle = "#a0aec0";
-            ctx.fill();
-            ctx.fillStyle = "white";
-            ctx.beginPath();
-            ctx.arc(-6, -4, 2.5, 0, Math.PI * 2);
-            ctx.arc(6, -4, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.ellipse(0, -14, 18, 9, 0, 0, Math.PI * 2);
-            ctx.fillStyle = "#111111";
-            ctx.fill();
+            ctx.save(); ctx.translate(x, y);
+            ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fillStyle = "#1a202c"; ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-15, -4); ctx.bezierCurveTo(-10, -10, 10, -10, 15, -4); ctx.bezierCurveTo(10, 2, -10, 2, -15, -4);
+            ctx.fillStyle = "#a0aec0"; ctx.fill();
+            ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-6, -4, 2.5, 0, Math.PI * 2); ctx.arc(6, -4, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(0, -14, 18, 9, 0, 0, Math.PI * 2); ctx.fillStyle = "#111111"; ctx.fill();
             ctx.restore();
         }
 
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            connections.forEach(conn => {
-                ctx.beginPath();
-                ctx.moveTo(nodes[conn[0]].x, nodes[conn[0]].y);
-                ctx.lineTo(nodes[conn[1]].x, nodes[conn[1]].y);
-                ctx.strokeStyle = '#cbd5e0';
-                ctx.lineWidth = 5;
-                ctx.stroke();
+            connections.forEach(c => {
+                ctx.beginPath(); ctx.moveTo(nodes[c[0]].x, nodes[c[0]].y); ctx.lineTo(nodes[c[1]].x, nodes[c[1]].y);
+                ctx.strokeStyle = '#cbd5e0'; ctx.lineWidth = 5; ctx.stroke();
+            });
+            nodes.forEach(n => {
+                ctx.beginPath(); ctx.arc(n.x, n.y, 28, 0, Math.PI * 2); ctx.fillStyle = "white"; ctx.fill();
+                ctx.strokeStyle = "#4a5568"; ctx.lineWidth = 2; ctx.stroke();
+                if (selectedNode === n) {
+                    ctx.beginPath(); ctx.arc(n.x, n.y, 34, 0, Math.PI * 2); ctx.strokeStyle = "#48bb78"; ctx.lineWidth = 5; ctx.stroke();
+                }
+                if (n.role === 'police') { ctx.font = '38px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('👮', n.x, n.y + 2); }
+                else if (n.role === 'thief') drawThief(n.x, n.y);
+            });
+        }
+
+        // Lógica da CPU
+        async function checkCPUTurn() {
+            if (isGameOver) return;
+            const mode = modeSelect.value;
+            if ((mode === 'PvC' && turn === 'thief') || (mode === 'CvP' && turn === 'police')) {
+                await new Promise(r => setTimeout(r, 800)); // Delay para parecer que está pensando
+                makeCPUMove();
+            }
+        }
+
+        function makeCPUMove() {
+            let possibleMoves = [];
+            const myPieces = nodes.filter(n => n.role === turn);
+            const thief = nodes.find(n => n.role === 'thief');
+
+            myPieces.forEach(p => {
+                nodes.forEach(target => {
+                    if (isValidMove(p, target)) possibleMoves.push({ from: p, to: target });
+                });
             });
 
-            nodes.forEach(node => {
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, 28, 0, Math.PI * 2);
-                ctx.fillStyle = "white";
-                ctx.fill();
-                ctx.strokeStyle = "#4a5568";
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                if (selectedNode === node) {
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, 34, 0, Math.PI * 2);
-                    ctx.strokeStyle = "#48bb78";
-                    ctx.lineWidth = 5;
-                    ctx.stroke();
+            if (possibleMoves.length > 0) {
+                let bestMove;
+                if (turn === 'thief') {
+                    // Ladrão CPU: Prioriza subir (menor level)
+                    bestMove = possibleMoves.reduce((prev, curr) => (curr.to.level < prev.to.level) ? curr : prev);
+                } else {
+                    // Policial CPU: Prioriza aproximar do ladrão
+                    bestMove = possibleMoves.reduce((prev, curr) => {
+                        const dist = Math.sqrt((curr.to.x - thief.x)**2 + (curr.to.y - thief.y)**2);
+                        const prevDist = Math.sqrt((prev.to.x - thief.x)**2 + (prev.to.y - thief.y)**2);
+                        return dist < prevDist ? curr : prev;
+                    });
                 }
+                executeMove(bestMove.from, bestMove.to);
+            }
+        }
 
-                if (node.role === 'police') {
-                    ctx.font = '38px serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('👮', node.x, node.y + 2);
-                } else if (node.role === 'thief') {
-                    drawThief(node.x, node.y);
-                }
-            });
+        function executeMove(from, to) {
+            to.role = from.role;
+            from.role = null;
+            turn = (turn === 'police') ? 'thief' : 'police';
+            updateStatus();
+            drawBoard();
+            if (!checkEndGame()) checkCPUTurn();
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            if (isGameOver) return;
+            const mode = modeSelect.value;
+            if ((mode === 'PvC' && turn === 'thief') || (mode === 'CvP' && turn === 'police')) return;
+
             const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
             nodes.forEach(node => {
-                if (Math.sqrt((mouseX - node.x)**2 + (mouseY - node.y)**2) < 35) handleInteraction(node);
+                if (Math.sqrt((mouseX - node.x)**2 + (mouseY - node.y)**2) < 35) {
+                    if (!selectedNode) {
+                        if (node.role === turn) selectedNode = node;
+                    } else {
+                        if (isValidMove(selectedNode, node)) {
+                            const from = selectedNode;
+                            selectedNode = null;
+                            executeMove(from, node);
+                        } else {
+                            selectedNode = (node.role === turn) ? node : null;
+                        }
+                    }
+                    drawBoard();
+                }
             });
         });
 
-        function handleInteraction(node) {
-            if (!selectedNode) {
-                if (node.role === turn) selectedNode = node;
-            } else {
-                if (isValidMove(selectedNode, node)) {
-                    node.role = selectedNode.role;
-                    selectedNode.role = null;
-                    selectedNode = null;
-                    turn = (turn === 'police') ? 'thief' : 'police';
-                    statusText.innerText = `Vez do ${turn === 'police' ? 'Policiais' : 'Ladrão'}`;
-                    setTimeout(checkEndGame, 50);
-                } else {
-                    selectedNode = (node.role === turn) ? node : null;
-                }
-            }
-            drawBoard();
-        }
-
         function isValidMove(from, to) {
-            if (to.role !== null) return false;
+            if (!from || !to || to.role !== null) return false;
             return connections.some(c => (c[0] === from.id && c[1] === to.id) || (c[1] === from.id && c[0] === to.id));
         }
 
         function checkEndGame() {
             const thief = nodes.find(n => n.role === 'thief');
-            if (!thief) return;
-            if (!nodes.some(n => isValidMove(thief, n))) {
-                alert("Policiais venceram!");
-                initGame();
-            } else if (thief.level === 0) {
-                alert("Ladrão venceu!");
-                initGame();
-            }
+            const canThiefMove = nodes.some(n => isValidMove(thief, n));
+            if (!canThiefMove) { alert("Policiais venceram!"); isGameOver = true; return true; }
+            if (thief.level === 0) { alert("Ladrão venceu!"); isGameOver = true; return true; }
+            return false;
         }
 
         initGame();
